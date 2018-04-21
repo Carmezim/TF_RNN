@@ -26,7 +26,9 @@ def generateData():
 X = tf.placeholder(tf.float32, [batch_size, truncated_backprop_length])
 Y = tf.placeholder(tf.int32, [batch_size, truncated_backprop_length])
 
-init_state = tf.placeholder(tf.float32, [batch_size, state_size])
+cell_state = tf.placeholder(tf.float32, [batch_size, state_size])
+hidden_state = tf.placeholder(tf.float32, [batch_size, state_size])
+init_state = tf.nn.rnn_cell.LSTMStateTuple(cell_state, hidden_state)
 
 W2 = tf.Variable(np.random.rand(state_size, num_classes), dtype=tf.float32)
 b2 = tf.Variable(np.zeros((1, num_classes)), dtype=tf.float32)
@@ -36,7 +38,7 @@ inputs_series = tf.split(X, truncated_backprop_length, 1)
 labels_series = tf.unstack(Y, axis=1)
 
 # forward pass
-cell = tf.nn.rnn_cell.BasicRNNCell(state_size)
+cell = tf.nn.rnn_cell.BasicRNNCell(state_size, state_is_tuple=True)
 states_series, current_state = tf.nn.static_rnn(cell, inputs_series, init_state)
 
 
@@ -81,7 +83,8 @@ with tf.Session() as sess:
 
     for epoch_idx in range(num_epochs):
         x, y = generateData()
-        _current_state = np.zeros((batch_size, state_size))
+        _current_cell_state = np.zeros((batch_size, state_size))
+        _current_hidden_state = np.zeros((batch_size, state_size))
 
         print("New data, epoch", epoch_idx)
 
@@ -97,7 +100,7 @@ with tf.Session() as sess:
                 feed_dict = {
                     X: batchX,
                     Y: batchY,
-                    init_state: _current_state
+                    init_state: _current_cell_state
                 }
             )
 
