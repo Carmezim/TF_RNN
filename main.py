@@ -28,27 +28,17 @@ Y = tf.placeholder(tf.int32, [batch_size, truncated_backprop_length])
 
 init_state = tf.placeholder(tf.float32, [batch_size, state_size])
 
-W = tf.Variable(np.random.rand(state_size+1, state_size), dtype=tf.float32)
-b = tf.Variable(np.zeros((1, state_size)), dtype=tf.float32)
-
 W2 = tf.Variable(np.random.rand(state_size, num_classes), dtype=tf.float32)
 b2 = tf.Variable(np.zeros((1, num_classes)), dtype=tf.float32)
 
 # unpack columns
-inputs_series = tf.unstack(X, axis=1)
+inputs_series = tf.split(X, truncated_backprop_length, 1)
 labels_series = tf.unstack(Y, axis=1)
 
 # forward pass
-current_state = init_state
-states_series = []
-for current_input in inputs_series:
-    current_input = tf.reshape(current_input, [batch_size, 1])
-    # increase number of columns
-    input_and_state_concatenated = tf.concat([current_input, current_state], 1)
-    # broadcast addition
-    next_state = tf.tanh(tf.matmul(input_and_state_concatenated, W) + b)
-    states_series.append(next_state)
-    current_state = next_state
+cell = tf.nn.rnn_cell.BasicRNNCell(state_size)
+states_series, current_state = tf.nn.static_rnn(cell, inputs_series, init_state)
+
 
 # loss
 # broadcasta addition
