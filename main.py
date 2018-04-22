@@ -10,6 +10,7 @@ state_size = 4
 num_classes = 2
 echo_step = 3
 batch_size = 5
+num_layers = 3
 num_batches = total_series_length//batch_size//truncated_backprop_length
 
 
@@ -26,9 +27,12 @@ def generateData():
 X = tf.placeholder(tf.float32, [batch_size, truncated_backprop_length])
 Y = tf.placeholder(tf.int32, [batch_size, truncated_backprop_length])
 
-cell_state = tf.placeholder(tf.float32, [batch_size, state_size])
-hidden_state = tf.placeholder(tf.float32, [batch_size, state_size])
-init_state = tf.nn.rnn_cell.LSTMStateTuple(cell_state, hidden_state)
+init_state = tf.placeholder(tf.float32, [num_layers, 2, batch_size, state_size])
+state_per_layer_list = tf.unstack(init_state, axis=0)
+rnn_tuple_state = tuple(
+    [tf.nn.rnn_cell.LSTMStateTuple(state_per_layer_list[idx][0], state_per_layer_list[idx][1]) \
+        for idx in range(num_layers)]
+)
 
 W2 = tf.Variable(np.random.rand(state_size, num_classes), dtype=tf.float32)
 b2 = tf.Variable(np.zeros((1, num_classes)), dtype=tf.float32)
@@ -38,9 +42,12 @@ inputs_series = tf.split(X, truncated_backprop_length, 1)
 labels_series = tf.unstack(Y, axis=1)
 
 # forward pass
-cell = tf.nn.rnn_cell.BasicRNNCell(state_size, state_is_tuple=True)
-states_series, current_state = tf.nn.static_rnn(cell, inputs_series, init_state)
+stacked_rnn = []
+for _ in range(num_layers):
+    stacked_rnn.append(tf.nn.rnn_cell.LSTMCell(state_size, state_is_tuple=True))
 
+cell = tf.nn.rnn_cell.MultiRNNCell(stacked_rnn, state_is_tuple=True)
+states_series, current_state = tf.nn.static_rnn(cell, inputs_series, initial_state=rnn_tuple_state)
 
 # loss
 # broadcasta addition
@@ -83,8 +90,7 @@ with tf.Session() as sess:
 
     for epoch_idx in range(num_epochs):
         x, y = generateData()
-        _current_cell_state = np.zeros((batch_size, state_size))
-        _current_hidden_state = np.zeros((batch_size, state_size))
+        _current_state = np.zeros((num_layers, 2, batch_size, state_size))
 
         print("New data, epoch", epoch_idx)
 
@@ -100,7 +106,7 @@ with tf.Session() as sess:
                 feed_dict = {
                     X: batchX,
                     Y: batchY,
-                    init_state: _current_cell_state
+                    init_state: _current_state
                 }
             )
 
